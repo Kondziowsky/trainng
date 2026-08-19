@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Trainng",
+    "slug": "trainng",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "trainng",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.trainng.app",
+      "predictiveBackGestureEnabled": false
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trainng.app"
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
