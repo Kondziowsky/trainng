@@ -41,7 +41,6 @@ src/
     workouts/              #   new.tsx, [id].tsx
   components/ui/           # Design-system primitives (Text, Button, Card, Input, …)
   features/                # Domain slices — each owns its api + queries + components
-    today/
     calendar/
     exercises/
     workouts/
@@ -127,6 +126,7 @@ purchasable-skins model would use — no store, entitlements or payments exist t
    The **`service_role` key must never appear in this app**; it bypasses RLS.
 3. In **Authentication → Providers**, keep *Email* enabled. For local testing you may
    want to turn **“Confirm email”** off so sign-up gives you a session immediately.
+   **Turn it back on before deploying publicly — see §7.1.**
 
 ### 5.2 Apply the schema
 
@@ -188,10 +188,88 @@ Two smaller notes:
 
 ---
 
-## 7. Deployment (later)
+## 7. Deployment
 
-* **Android / iOS** — EAS Build (`eas build -p android`), then Google Play / App Store.
-* **Web** — `npx expo export -p web` produces a static site for any static host.
-* **Backend** — Supabase is already hosted; only the migrations need promoting.
+### 7.1 Before the first public deploy
+
+Four things must be true, or the deployed app is broken or unsafe. The first two are
+Supabase dashboard settings and cannot be committed to this repo.
+
+1. **Re-enable email confirmation.** §5.1 suggests turning *Confirm email* off so local
+   testing gives you a session immediately. Left off in public, anyone can register an
+   address they do not own. **Authentication → Sign In / Providers → Email → Confirm
+   email → on.**
+2. **Point auth at the deployed origin.** **Authentication → URL Configuration →
+   Site URL** must be the deployed URL, with any preview domains added to *Redirect
+   URLs*. Otherwise confirmation links resolve to `localhost` and no one can confirm.
+3. **The two `EXPO_PUBLIC_*` values must exist in the host's build environment.** `.env`
+   is gitignored, so the host does not inherit it. `npm run build:web` fails loudly when
+   they are missing — see §7.3.
+4. **Free-tier projects pause after ~7 days of inactivity.** A paused project refuses
+   every request and the app looks broken until it is resumed from the dashboard.
+
+### 7.2 Web
+
+`app.json` sets `web.output: "single"`, so the export is a **client-routed SPA**: the
+build emits exactly one `index.html` and every route is resolved in the browser. A host
+that serves files literally will 404 on a hard refresh of any nested path such as
+`/settings`. The catch-all rewrite is therefore mandatory, and is already committed for
+all three common hosts:
+
+| Host | File | Notes |
+| --- | --- | --- |
+| Netlify | `netlify.toml` + `public/_redirects` | Build command and publish dir included. |
+| Cloudflare Pages | `public/_redirects` | Set build command to `npm run build:web`, output dir `dist`. |
+| Vercel | `vercel.json` | Build command and output dir included. |
+
+Anything in `public/` is copied verbatim to the root of `dist/`, which is how
+`_redirects` reaches the deployed site.
+
+```bash
+npm run build:web        # checks env, then exports to dist/
+```
+
+Connect the repository to the host and set the two `EXPO_PUBLIC_*` variables in its
+build environment. Pushes to `main` then rebuild automatically.
+
+### 7.3 The build-time environment guard
+
+`EXPO_PUBLIC_*` values are **inlined into the bundle at build time**, not read at
+runtime. A host with them unset would otherwise produce a bundle that throws on first
+import and renders a blank page — a failure invisible in the deploy log.
+
+`scripts/check-env.mjs` runs first in `build:web` and fails the build when a value is
+missing, still holds an `.env.example` placeholder, is not a URL, or looks like a
+`service_role` key. Run it alone with `npm run check-env`.
+
+Because the values are baked in, **changing one on the host requires a redeploy**, not a
+restart.
+
+### 7.4 Android / iOS
+
+EAS Build compiles in the cloud, so neither a Mac nor a local Android toolchain is
+needed.
+
+```bash
+npm install -g eas-cli
+eas login
+eas build:configure
+eas build -p android --profile preview   # installable APK for sideloading
+```
+
+A Play Store release needs an AAB (`--profile production`), a Google Play developer
+account (one-time fee) and a store listing. iOS needs an Apple Developer Program
+membership (annual) and goes to testers through TestFlight.
+
+Set the same two `EXPO_PUBLIC_*` values in EAS: either in `eas.json` under the profile's
+`env`, or as EAS environment variables.
+
+### 7.5 Backend
+
+Supabase is already hosted; only migrations need promoting:
+
+```bash
+npx supabase db push
+```
 
 Nothing in the app depends on a local-only backend.
